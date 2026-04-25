@@ -1,362 +1,231 @@
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
-import java.awt.event.*;
 import java.io.*;
 import java.util.Base64;
 import java.util.HashMap;
 
 public class SecureVaultMultiAccount extends JFrame {
 
-    // ================= THEME & FONTS =================
-    Font titleFont = new Font("Segoe UI", Font.BOLD, 26);
-    Font normalFont = new Font("Segoe UI", Font.PLAIN, 14);
-
-    // ================= COMPONENTS =================
-    JTextField loginIdField;
-    JPasswordField masterPassField;
-    JButton loginButton, createAccountButton;
-    JTable passwordTable;
-    DefaultTableModel tableModel;
-    JButton addButton, showHideButton, deleteButton, logoutBtn;
-
+    Font TF = new Font("Segoe UI", Font.BOLD, 26), NF = new Font("Segoe UI", Font.PLAIN, 14);
+    JTextField loginIdField; JPasswordField masterPassField;
+    JTable passwordTable; DefaultTableModel tableModel;
     HashMap<String, String> accounts = new HashMap<>();
-    String currentAccountID = null;
-    boolean showPasswords = false;
+    String currentID = null; boolean showPass = false;
+    final String AF = "accounts.dat", PF = "passwords.dat";
 
-    String accountsFile = "accounts.dat";
-    String passwordsFile = "passwords.dat";
+    // ── Demo vault data ──────────────────────────────────────────────────────
+    final String[][] VAULT = {
+        {"facebook.com",  "md.rayhan@gmail.com",  "Rayhan@FB2024"},
+        {"github.com",    "rayhan-dev",            "Git#Secure99!"},
+        {"gmail.com",     "md.rayhanx617",         "Gmail@Pass#1"},
+        {"youtube.com",   "rayhan_yt",             "YT!Watch2024"},
+        {"linkedin.com",  "rayhan.pro",            "Link$In2024"},
+        {"instagram.com", "rayhan_ig",             "Insta@Snap#7"},
+        {"twitter.com",   "rayhan_tw",             "Tweet!Bird99"},
+        {"netflix.com",   "rayhan.stream",         "N3tFlix@2024"},
+        {"amazon.com",    "rayhan.shop",           "Amaz0n$Buy!"},
+        {"dropbox.com",   "rayhan.cloud",          "Dr0pB0x#Safe"}
+    };
 
     public SecureVaultMultiAccount() {
         loadAccounts();
-        initLoginUI();
-        fadeInFrame();
+        // Auto-create demo account on first run
+        if (!accounts.containsKey("demo")) {
+            accounts.put("demo", enc("demo123"));
+            saveAccounts();
+        }
+        loginUI();
+        fade();
     }
 
-    // =================================================
-    // RESPONSIVE LOGIN UI
-    // =================================================
-    private void initLoginUI() {
-        setTitle("SecureVault - Login");
-        setDefaultCloseOperation(EXIT_ON_CLOSE);
-        setMinimumSize(new Dimension(700, 450));
-        setSize(850, 500);
-        setLocationRelativeTo(null);
+    // ── LOGIN UI ─────────────────────────────────────────────────────────────
+    void loginUI() {
+        setTitle("SecureVault - Login"); setDefaultCloseOperation(EXIT_ON_CLOSE);
+        setMinimumSize(new Dimension(700, 450)); setSize(850, 530); setLocationRelativeTo(null);
+        JPanel root = new JPanel(new GridLayout(1, 2));
 
-        // Main Container: Split into 2 halves (Left: Info, Right: Form)
-        JPanel mainContainer = new JPanel(new GridLayout(1, 2));
-
-        // --- LEFT PANEL (Gradient & Info) ---
-        JPanel leftPanel = new JPanel(new GridBagLayout()) {
+        JPanel left = new JPanel(new GridBagLayout()) {
             protected void paintComponent(Graphics g) {
-                super.paintComponent(g);
-                Graphics2D g2 = (Graphics2D) g;
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                GradientPaint gp = new GradientPaint(0, 0, new Color(0, 180, 120), 0, getHeight(),
-                        new Color(0, 120, 80));
-                g2.setPaint(gp);
+                super.paintComponent(g); Graphics2D g2 = (Graphics2D) g;
+                g2.setPaint(new GradientPaint(0,0,new Color(0,180,120),0,getHeight(),new Color(0,120,80)));
                 g2.fillRect(0, 0, getWidth(), getHeight());
             }
         };
+        GridBagConstraints c = new GridBagConstraints(); c.gridx=0; c.fill=GridBagConstraints.HORIZONTAL; c.insets=new Insets(10,20,10,20);
+        JLabel wl = new JLabel("Welcome Back!", SwingConstants.CENTER);
+        wl.setFont(new Font("Segoe UI",Font.BOLD,32)); wl.setForeground(Color.WHITE); left.add(wl,c);
+        JLabel il = new JLabel("<html><center>To keep connected with us<br>please login with your info</center></html>",SwingConstants.CENTER);
+        il.setFont(NF); il.setForeground(Color.WHITE); left.add(il,c);
+        JButton ca = new JButton("Create Account");
+        ca.setContentAreaFilled(false); ca.setForeground(Color.WHITE);
+        ca.setBorder(BorderFactory.createLineBorder(Color.WHITE,2)); ca.setFocusPainted(false);
+        ca.addActionListener(e -> createAccountUI());
+        c.insets=new Insets(30,60,10,60); left.add(ca,c);
+        // Demo credentials hint
+        JLabel hint = new JLabel("<html><center><b>Demo Credentials</b><br>ID: demo | Pass: demo123</center></html>", SwingConstants.CENTER);
+        hint.setFont(new Font("Segoe UI",Font.PLAIN,12)); hint.setForeground(new Color(220,255,220));
+        c.insets=new Insets(10,20,5,20); left.add(hint,c);
 
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.insets = new Insets(10, 20, 10, 20);
-        gbc.fill = GridBagConstraints.HORIZONTAL;
+        JPanel right = new JPanel(new GridBagLayout()); right.setBackground(Color.WHITE);
+        GridBagConstraints r = new GridBagConstraints(); r.gridx=0; r.fill=GridBagConstraints.HORIZONTAL;
+        JLabel lt = new JLabel("Login Account",SwingConstants.CENTER);
+        lt.setFont(TF); lt.setForeground(new Color(0,150,100));
+        r.insets=new Insets(0,50,20,50); right.add(lt,r);
+        r.insets=new Insets(5,50,2,50);
+        right.add(new JLabel("Account ID"),r);
+        loginIdField=new JTextField("demo"); loginIdField.setPreferredSize(new Dimension(0,35)); right.add(loginIdField,r);
+        right.add(new JLabel("Master Password"),r);
+        masterPassField=new JPasswordField("demo123"); masterPassField.setPreferredSize(new Dimension(0,35)); right.add(masterPassField,r);
+        JButton lb=new JButton("SIGN IN"); lb.setBackground(new Color(0,180,120)); lb.setForeground(Color.WHITE);
+        lb.setPreferredSize(new Dimension(0,40)); lb.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        lb.addActionListener(e -> checkLogin());
+        r.insets=new Insets(15,50,5,50); right.add(lb,r);
+        JButton demo=new JButton("⚡ Demo Login");
+        demo.setBackground(new Color(103,58,183)); demo.setForeground(Color.WHITE);
+        demo.setPreferredSize(new Dimension(0,38)); demo.setFocusPainted(false);
+        demo.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        demo.addActionListener(e -> { loginIdField.setText("demo"); masterPassField.setText("demo123"); checkLogin(); });
+        r.insets=new Insets(4,50,10,50); right.add(demo,r);
 
-        JLabel welcome = new JLabel("Welcome Back!", SwingConstants.CENTER);
-        welcome.setFont(new Font("Segoe UI", Font.BOLD, 32));
-        welcome.setForeground(Color.WHITE);
-        leftPanel.add(welcome, gbc);
-
-        JLabel info = new JLabel(
-                "<html><center>To keep connected with us<br>please login with your info</center></html>",
-                SwingConstants.CENTER);
-        info.setFont(normalFont);
-        info.setForeground(Color.WHITE);
-        leftPanel.add(info, gbc);
-
-        createAccountButton = new JButton("Create Account");
-        styleOutlineButton(createAccountButton);
-        createAccountButton.addActionListener(e -> createAccountUI());
-        gbc.insets = new Insets(30, 60, 10, 60);
-        leftPanel.add(createAccountButton, gbc);
-
-        // --- RIGHT PANEL (Login Form) ---
-        JPanel rightPanel = new JPanel(new GridBagLayout());
-        rightPanel.setBackground(Color.WHITE);
-
-        GridBagConstraints rbc = new GridBagConstraints();
-        rbc.gridx = 0;
-        rbc.fill = GridBagConstraints.HORIZONTAL;
-        rbc.insets = new Insets(5, 50, 5, 50);
-
-        JLabel loginTitle = new JLabel("Login Account", SwingConstants.CENTER);
-        loginTitle.setFont(titleFont);
-        loginTitle.setForeground(new Color(0, 150, 100));
-        rbc.insets = new Insets(0, 50, 30, 50);
-        rightPanel.add(loginTitle, rbc);
-
-        rbc.insets = new Insets(5, 50, 2, 50);
-        rightPanel.add(new JLabel("Account ID"), rbc);
-        loginIdField = new JTextField(15);
-        loginIdField.setPreferredSize(new Dimension(0, 35));
-        rightPanel.add(loginIdField, rbc);
-
-        rightPanel.add(new JLabel("Master Password"), rbc);
-        masterPassField = new JPasswordField(15);
-        masterPassField.setPreferredSize(new Dimension(0, 35));
-        rightPanel.add(masterPassField, rbc);
-
-        loginButton = new JButton("SIGN IN");
-        loginButton.setBackground(new Color(0, 180, 120));
-        loginButton.setForeground(Color.WHITE);
-        loginButton.setPreferredSize(new Dimension(0, 40));
-        loginButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        loginButton.addActionListener(e -> checkLogin());
-        rbc.insets = new Insets(20, 50, 10, 50);
-        rightPanel.add(loginButton, rbc);
-
-        mainContainer.add(leftPanel);
-        mainContainer.add(rightPanel);
-
-        setContentPane(mainContainer);
-        setVisible(true);
+        root.add(left); root.add(right); setContentPane(root); setVisible(true);
     }
 
-    // =================================================
-    // RESPONSIVE DASHBOARD UI
-    // =================================================
-    private void initDashboardUI() {
-        setTitle("SecureVault - Dashboard (" + currentAccountID + ")");
-        getContentPane().removeAll();
-        setLayout(new BorderLayout());
-
-        JLabel header = new JLabel("  Password Manager Dashboard - " + currentAccountID);
-        header.setFont(new Font("Segoe UI", Font.BOLD, 20));
-        header.setForeground(Color.WHITE);
-        header.setBackground(new Color(33, 150, 243));
-        header.setOpaque(true);
-        header.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
-        add(header, BorderLayout.NORTH);
-
-        String[] columns = { "Website/App", "Username", "Password" };
-        tableModel = new DefaultTableModel(columns, 0);
-        passwordTable = new JTable(tableModel);
-        passwordTable.setFont(normalFont);
-        passwordTable.setRowHeight(30);
-
-        JScrollPane scrollPane = new JScrollPane(passwordTable);
-        scrollPane.setBorder(BorderFactory.createEmptyBorder());
-        add(scrollPane, BorderLayout.CENTER);
-
+    // ── DASHBOARD UI ─────────────────────────────────────────────────────────
+    void dashUI() {
+        setTitle("SecureVault - Dashboard (" + currentID + ")");
+        getContentPane().removeAll(); setLayout(new BorderLayout());
+        JLabel hdr = new JLabel("  Password Manager Dashboard - " + currentID);
+        hdr.setFont(new Font("Segoe UI",Font.BOLD,20)); hdr.setForeground(Color.WHITE);
+        hdr.setBackground(new Color(33,150,243)); hdr.setOpaque(true);
+        hdr.setBorder(BorderFactory.createEmptyBorder(15,15,15,15)); add(hdr, BorderLayout.NORTH);
+        tableModel = new DefaultTableModel(new String[]{"Website/App","Username","Password"},0);
+        passwordTable = new JTable(tableModel); passwordTable.setFont(NF); passwordTable.setRowHeight(30);
+        add(new JScrollPane(passwordTable), BorderLayout.CENTER);
         loadPasswords();
-
-        // Responsive Button Panel using FlowLayout
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 15));
-        buttonPanel.setBackground(new Color(245, 245, 245));
-
-        addButton = createButton("➕ Add", new Color(76, 175, 80));
-        showHideButton = createButton("👁 Show / Hide", new Color(33, 150, 243));
-        deleteButton = createButton("🗑 Delete", new Color(244, 67, 54));
-        logoutBtn = createButton("Logout", new Color(255, 152, 0));
-
-        buttonPanel.add(addButton);
-        buttonPanel.add(showHideButton);
-        buttonPanel.add(deleteButton);
-        buttonPanel.add(logoutBtn);
-
-        add(buttonPanel, BorderLayout.SOUTH);
-
-        // Listeners
-        addButton.addActionListener(e -> addPassword());
-        showHideButton.addActionListener(e -> toggleShowPasswords());
-        deleteButton.addActionListener(e -> deletePassword());
-        logoutBtn.addActionListener(e -> {
-            currentAccountID = null;
-            initLoginUI();
-        });
-
-        revalidate();
-        repaint();
+        JPanel bp = new JPanel(new FlowLayout(FlowLayout.CENTER,12,12)); bp.setBackground(new Color(245,245,245));
+        JButton add=btn("➕ Add",new Color(76,175,80)), sh=btn("👁 Show/Hide",new Color(33,150,243)),
+                del=btn("🗑 Delete",new Color(244,67,54)),
+                vault=btn("🗃 Load Demo Data",new Color(103,58,183)),
+                lo=btn("Logout",new Color(255,152,0));
+        bp.add(add); bp.add(sh); bp.add(del); bp.add(vault); bp.add(lo); add(bp, BorderLayout.SOUTH);
+        add.addActionListener(e -> addPassword());
+        sh.addActionListener(e -> toggleShow());
+        del.addActionListener(e -> deletePassword());
+        vault.addActionListener(e -> loadVaultData());
+        lo.addActionListener(e -> { currentID=null; loginUI(); });
+        revalidate(); repaint();
     }
 
-    // =================================================
-    // LOGIC & UTILITIES
-    // =================================================
-    private void checkLogin() {
-        String accountID = loginIdField.getText().trim();
-        String pass = new String(masterPassField.getPassword());
-
-        if (accounts.containsKey(accountID)) {
-            if (decrypt(accounts.get(accountID)).equals(pass)) {
-                currentAccountID = accountID;
-                initDashboardUI();
-            } else {
-                JOptionPane.showMessageDialog(this, "Wrong Password ❌");
-            }
-        } else {
-            JOptionPane.showMessageDialog(this, "Account ID not found ❌");
-        }
-    }
-
-    private void createAccountUI() {
-        JTextField accountField = new JTextField();
-        JPasswordField passField = new JPasswordField();
-        Object[] msg = { "Account ID:", accountField, "Master Password:", passField };
-
-        if (JOptionPane.showConfirmDialog(this, msg, "Create Account",
-                JOptionPane.OK_CANCEL_OPTION) == JOptionPane.OK_OPTION) {
-            String id = accountField.getText().trim();
-            String pw = new String(passField.getPassword());
-            if (!id.isEmpty() && !pw.isEmpty()) {
-                accounts.put(id, encrypt(pw));
-                saveAccounts();
-                JOptionPane.showMessageDialog(this, "Account Created! ✅");
+    // ── LOAD BULK DEMO VAULT DATA ─────────────────────────────────────────────
+    void loadVaultData() {
+        int added = 0;
+        for (String[] row : VAULT) {
+            // avoid duplicates
+            if (getPW(currentID, row[0], row[1]).isEmpty()) {
+                savePW(currentID, row[0], row[1], enc(row[2]));
+                tableModel.addRow(new Object[]{row[0], row[1], "******"});
+                added++;
             }
         }
+        JOptionPane.showMessageDialog(this,
+            added > 0 ? added + " demo entries loaded! ✅" : "All demo data already loaded ℹ️");
     }
 
-    private void addPassword() {
-        JTextField site = new JTextField();
-        JTextField user = new JTextField();
-        JPasswordField pass = new JPasswordField();
-        Object[] msg = { "Site:", site, "User:", user, "Pass:", pass };
+    // ── AUTH ──────────────────────────────────────────────────────────────────
+    //  Login Verification (checkLogin)
+    void checkLogin() {
+        String id=loginIdField.getText().trim(), pw=new String(masterPassField.getPassword());
+        if (!accounts.containsKey(id)) { JOptionPane.showMessageDialog(this,"Account ID not found ❌"); return; }
+        if (dec(accounts.get(id)).equals(pw)) { currentID=id; dashUI(); }
+        else JOptionPane.showMessageDialog(this,"Wrong Password ❌");
+    }
 
-        if (JOptionPane.showConfirmDialog(this, msg, "Add Entry",
-                JOptionPane.OK_CANCEL_OPTION) == JOptionPane.OK_OPTION) {
-            String enc = encrypt(new String(pass.getPassword()));
-            savePasswordToFile(currentAccountID, site.getText(), user.getText(), enc);
-            tableModel.addRow(new Object[] { site.getText(), user.getText(), "******" });
+    void createAccountUI() {
+        JTextField af=new JTextField(); JPasswordField pf=new JPasswordField();
+        if(JOptionPane.showConfirmDialog(this,new Object[]{"Account ID:",af,"Master Password:",pf},"Create Account",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION){
+            String id=af.getText().trim(), pw=new String(pf.getPassword());
+            if(!id.isEmpty()&&!pw.isEmpty()){ accounts.put(id,enc(pw)); saveAccounts(); JOptionPane.showMessageDialog(this,"Account Created! ✅"); }
         }
     }
 
-    private void toggleShowPasswords() {
-        showPasswords = !showPasswords;
-        for (int i = 0; i < tableModel.getRowCount(); i++) {
-            String enc = getEncryptedPasswordFromFile(currentAccountID, (String) tableModel.getValueAt(i, 0),
-                    (String) tableModel.getValueAt(i, 1));
-            tableModel.setValueAt(showPasswords ? decrypt(enc) : "******", i, 2);
+    // ── PASSWORD CRUD ─────────────────────────────────────────────────────────
+    void addPassword() {
+        String[][] s = VAULT; int idx=(int)(Math.random()*s.length);
+        JTextField sf=new JTextField(s[idx][0]), uf=new JTextField(s[idx][1]);
+        JPasswordField pf=new JPasswordField(s[idx][2]);
+        JButton rf=new JButton("🎲 Refill"); rf.setFocusPainted(false);
+        rf.addActionListener(e->{ int i=(int)(Math.random()*s.length); sf.setText(s[i][0]); uf.setText(s[i][1]); pf.setText(s[i][2]); });
+        if(JOptionPane.showConfirmDialog(this,new Object[]{"Site:",sf,"User:",uf,"Pass:",pf,rf},"Add Entry ⚡ Auto-Filled",JOptionPane.OK_CANCEL_OPTION)==JOptionPane.OK_OPTION){
+            savePW(currentID,sf.getText(),uf.getText(),enc(new String(pf.getPassword())));
+            tableModel.addRow(new Object[]{sf.getText(),uf.getText(),"******"});
         }
     }
 
-    private void deletePassword() {
-        int row = passwordTable.getSelectedRow();
-        if (row >= 0) {
-            removePasswordFromFile(currentAccountID, (String) tableModel.getValueAt(row, 0),
-                    (String) tableModel.getValueAt(row, 1));
-            tableModel.removeRow(row);
+    void toggleShow() {
+        showPass=!showPass;
+        for(int i=0;i<tableModel.getRowCount();i++){
+            String e=getPW(currentID,(String)tableModel.getValueAt(i,0),(String)tableModel.getValueAt(i,1));
+            tableModel.setValueAt(showPass?dec(e):"******",i,2);
         }
     }
 
-    // --- STYLING HELPERS ---
-    private JButton createButton(String text, Color bg) {
-        JButton btn = new JButton(text);
-        btn.setBackground(bg);
-        btn.setForeground(Color.WHITE);
-        btn.setFocusPainted(false);
-        btn.setPreferredSize(new Dimension(130, 35));
-        return btn;
+    void deletePassword() {
+        int row=passwordTable.getSelectedRow();
+        if(row>=0){ delPW(currentID,(String)tableModel.getValueAt(row,0),(String)tableModel.getValueAt(row,1)); tableModel.removeRow(row); }
     }
 
-    private void styleOutlineButton(JButton btn) {
-        btn.setContentAreaFilled(false);
-        btn.setForeground(Color.WHITE);
-        btn.setBorder(BorderFactory.createLineBorder(Color.WHITE, 2));
-        btn.setFocusPainted(false);
+    // ── HELPERS ───────────────────────────────────────────────────────────────
+    JButton btn(String t, Color bg) {
+        JButton b=new JButton(t); b.setBackground(bg); b.setForeground(Color.WHITE);
+        b.setFocusPainted(false); b.setPreferredSize(new Dimension(145,35)); return b;
     }
 
-    private void fadeInFrame() {
+    void fade() {
         setOpacity(0f);
-        Timer timer = new Timer(20, e -> {
-            float op = getOpacity() + 0.05f;
-            if (op >= 1f) {
-                setOpacity(1f);
-                ((Timer) e.getSource()).stop();
-            } else
-                setOpacity(op);
-        });
-        timer.start();
+        Timer tm=new Timer(20,e->{ float op=getOpacity()+0.05f; if(op>=1f){setOpacity(1f);((Timer)e.getSource()).stop();}else setOpacity(op); });
+        tm.start();
     }
 
-    // --- FILE OPS (Simplified) ---
-    private void saveAccounts() {
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter(accountsFile))) {
-            for (String key : accounts.keySet())
-                bw.write(key + "|" + accounts.get(key) + "\n");
-        } catch (Exception e) {
-        }
+    // ── FILE OPS ─────────────────────────────────────────────────────────────
+    void saveAccounts() {
+        try(BufferedWriter bw=new BufferedWriter(new FileWriter(AF))){
+            for(String k:accounts.keySet()) bw.write(k+"|"+accounts.get(k)+"\n");
+        }catch(Exception ignored){}
     }
 
-    private void loadAccounts() {
-        try (BufferedReader br = new BufferedReader(new FileReader(accountsFile))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                String[] p = line.split("\\|");
-                if (p.length == 2)
-                    accounts.put(p[0], p[1]);
-            }
-        } catch (Exception e) {
-        }
+    void loadAccounts() {
+        try(BufferedReader br=new BufferedReader(new FileReader(AF))){
+            String l; while((l=br.readLine())!=null){String[]p=l.split("\\|");if(p.length==2)accounts.put(p[0],p[1]);}
+        }catch(Exception ignored){}
     }
 
-    private void loadPasswords() {
-        try (BufferedReader br = new BufferedReader(new FileReader(passwordsFile))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                String[] p = line.split("\\|");
-                if (p[0].equals(currentAccountID))
-                    tableModel.addRow(new Object[] { p[1], p[2], "******" });
-            }
-        } catch (Exception e) {
-        }
+    void loadPasswords() {
+        try(BufferedReader br=new BufferedReader(new FileReader(PF))){
+            String l; while((l=br.readLine())!=null){String[]p=l.split("\\|");if(p[0].equals(currentID))tableModel.addRow(new Object[]{p[1],p[2],"******"});}
+        }catch(Exception ignored){}
     }
 
-    private void savePasswordToFile(String id, String s, String u, String p) {
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter(passwordsFile, true))) {
-            bw.write(id + "|" + s + "|" + u + "|" + p + "\n");
-        } catch (Exception e) {
-        }
+    void savePW(String id,String s,String u,String p) {
+        try(BufferedWriter bw=new BufferedWriter(new FileWriter(PF,true))){ bw.write(id+"|"+s+"|"+u+"|"+p+"\n"); }catch(Exception ignored){}
     }
 
-    private String getEncryptedPasswordFromFile(String id, String s, String u) {
-        try (BufferedReader br = new BufferedReader(new FileReader(passwordsFile))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                String[] p = line.split("\\|");
-                if (p[0].equals(id) && p[1].equals(s) && p[2].equals(u))
-                    return p[3];
-            }
-        } catch (Exception e) {
-        }
-        return "";
+    String getPW(String id,String s,String u) {
+        try(BufferedReader br=new BufferedReader(new FileReader(PF))){
+            String l; while((l=br.readLine())!=null){String[]p=l.split("\\|");if(p[0].equals(id)&&p[1].equals(s)&&p[2].equals(u))return p[3];}
+        }catch(Exception ignored){} return "";
     }
 
-    private void removePasswordFromFile(String id, String s, String u) {
-        File temp = new File("temp.dat");
-        try (BufferedReader br = new BufferedReader(new FileReader(passwordsFile));
-                BufferedWriter bw = new BufferedWriter(new FileWriter(temp))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                String[] p = line.split("\\|");
-                if (!(p[0].equals(id) && p[1].equals(s) && p[2].equals(u)))
-                    bw.write(line + "\n");
-            }
-        } catch (Exception e) {
-        }
-        new File(passwordsFile).delete();
-        temp.renameTo(new File(passwordsFile));
+    void delPW(String id,String s,String u) {
+        File tmp=new File("temp.dat");
+        try(BufferedReader br=new BufferedReader(new FileReader(PF));BufferedWriter bw=new BufferedWriter(new FileWriter(tmp))){
+            String l; while((l=br.readLine())!=null){String[]p=l.split("\\|");if(!(p[0].equals(id)&&p[1].equals(s)&&p[2].equals(u)))bw.write(l+"\n");}
+        }catch(Exception ignored){}
+        new File(PF).delete(); tmp.renameTo(new File(PF));
     }
 
-    private String encrypt(String t) {
-        return Base64.getEncoder().encodeToString(t.getBytes());
-    }
+    String enc(String t){ return Base64.getEncoder().encodeToString(t.getBytes()); }
+    String dec(String e){ return new String(Base64.getDecoder().decode(e)); }
 
-    private String decrypt(String e) {
-        return new String(Base64.getDecoder().decode(e));
-    }
-
-    public static void main(String[] args) {
-        SwingUtilities.invokeLater(SecureVaultMultiAccount::new);
-    }
+    public static void main(String[] args){ SwingUtilities.invokeLater(SecureVaultMultiAccount::new); }
 }
